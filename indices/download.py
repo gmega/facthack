@@ -2,6 +2,7 @@
 
 import json
 import sys
+from multiprocessing import Pool
 
 from elasticsearch import helpers
 from elasticsearch.client import Elasticsearch
@@ -26,6 +27,7 @@ FILTER_CATEGORIES = ['Cronaca Locale', 'Prima Pagina', 'Economia / Finanza', 'No
 FILTER_SECTORS = ['Generalista', 'Attualità', 'Economia e Finanza']
 
 EXCLUDE_HASHES = ['0647ac34aa1ed17ba998f7fc1d1f7ef2', 'd41d8cd98f00b204e9800998ecf8427e']
+client = Elasticsearch(sys.argv[1])
 
 
 def should_drop(document):
@@ -64,26 +66,30 @@ def get_categories(document):
     return [category['nc:categoryID'] for category in categories]
 
 
-def process_index(index, client, output):
-    print index
-    for document in helpers.scan(
-            client,
-            query='{"query": {"match_all": {}}}',
-            index=index,
-            doc_type='news_v2',
-            scroll='5m'
-    ):
-        document = document['_source']
-        if not should_drop(document):
-            json.dump(document, output)
-        output.write('\n')
+def process_index(index):
+    index = index.strip()
+    print 'Processing index %s' % index
+    with open('./outputs/%s.jsonl' % index, 'w') as output:
+        for document in helpers.scan(
+                client,
+                query='{"query": {"match_all": {}}}',
+                index=index,
+                doc_type='news_v2',
+                scroll='5m'
+        ):
+            document = document['_source']
+            if not should_drop(document):
+                json.dump(document, output)
+            output.write('\n')
+    print 'Done processing %s' % index
 
 
-client = Elasticsearch(sys.argv[1])
+pool = Pool(4)
+try:
+    with open('index-sample.csv', 'r') as input:
+        indices = input.readlines()
 
-with open('index-sample.csv', 'r') as indices:
-    for index in indices:
-        index = index.strip()
-        with open('./outputs/%s.jsonl' % index, 'w') as output:
-            process_index(index, client, output)
-        break
+    for result in pool.imap_unordered(process_index, indices):
+        pass
+finally:
+    pool.terminate()
