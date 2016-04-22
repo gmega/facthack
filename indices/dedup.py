@@ -13,6 +13,10 @@ for raw_document in sys.stdin:
         continue
     document = json.loads(raw_document)
     hash = document['nc:contentInfo']['nc:hash']
+
+    # Filter out documents not declared to be in italian.
+    if document['nc:inLanguage'] != 'it':
+        continue
     
     # Filters out bad annotations.
     annotations = [
