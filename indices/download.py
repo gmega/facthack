@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 
 import json
+import logging
 import sys
+from functools import partial
 from multiprocessing import Pool
 
 from elasticsearch import helpers
 from elasticsearch.client import Elasticsearch
-import logging
 
 EXCLUDE_SOURCES = [
     'Noodls', 'The Sidney Morning Herald.com', 'Reuters UK', 'Usa Today.com', 'Stern.de', 'Facts.ch',
@@ -28,8 +29,8 @@ FILTER_CATEGORIES = ['Cronaca Locale', 'Prima Pagina', 'Economia / Finanza', 'No
 FILTER_SECTORS = ['Generalista', 'Attualità', 'Economia e Finanza']
 
 EXCLUDE_HASHES = ['0647ac34aa1ed17ba998f7fc1d1f7ef2', 'd41d8cd98f00b204e9800998ecf8427e']
-client = Elasticsearch(sys.argv[1])
 logger = logging.getLogger(__name__)
+
 
 def should_drop(document):
     info = document['nc:contentInfo']
@@ -67,13 +68,15 @@ def get_categories(document):
     return [category['nc:categoryID'] for category in categories]
 
 
-def process_index(index):
+def process_index(index, client, query, output=None):
     index = index.strip()
+    squery = json.dumps(query)
     print 'Processing index %s' % index
-    with open('./outputs/%s.jsonl' % index, 'w') as output:
+    output = './outputs/%s.jsonl' % index if output is None else output
+    with open(output, 'w') as ostream:
         for document in helpers.scan(
                 client,
-                query='{"query": {"match_all": {}}}',
+                query=squery,
                 index=index,
                 doc_type='news_v2',
                 scroll='5m'
@@ -81,19 +84,8 @@ def process_index(index):
             try:
                 document = document['_source']
                 if not should_drop(document):
-                    json.dump(document, output)
-                output.write('\n')
+                    json.dump(document, ostream)
+                    ostream.write('\n')
             except:
                 logger.error('Error processing document.')
     print 'Done processing %s' % index
-
-
-pool = Pool(4)
-try:
-    with open('index-sample.csv', 'r') as input:
-        indices = input.readlines()
-
-    for result in pool.imap_unordered(process_index, indices):
-        pass
-finally:
-    pool.terminate()
