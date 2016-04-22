@@ -15,7 +15,7 @@ for raw_document in sys.stdin:
     hash = document['nc:contentInfo']['nc:hash']
 
     # Filter out documents not declared to be in italian.
-    if document['nc:inLanguage'] != 'it':
+    if document['rnews:inLanguage'] != 'it':
         continue
     
     # Filters out bad annotations.
