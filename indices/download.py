@@ -6,6 +6,7 @@ from multiprocessing import Pool
 
 from elasticsearch import helpers
 from elasticsearch.client import Elasticsearch
+import logging
 
 EXCLUDE_SOURCES = [
     'Noodls', 'The Sidney Morning Herald.com', 'Reuters UK', 'Usa Today.com', 'Stern.de', 'Facts.ch',
@@ -28,7 +29,7 @@ FILTER_SECTORS = ['Generalista', 'Attualità', 'Economia e Finanza']
 
 EXCLUDE_HASHES = ['0647ac34aa1ed17ba998f7fc1d1f7ef2', 'd41d8cd98f00b204e9800998ecf8427e']
 client = Elasticsearch(sys.argv[1])
-
+logger = logging.getLogger(__name__)
 
 def should_drop(document):
     info = document['nc:contentInfo']
@@ -77,10 +78,13 @@ def process_index(index):
                 doc_type='news_v2',
                 scroll='5m'
         ):
-            document = document['_source']
-            if not should_drop(document):
-                json.dump(document, output)
-            output.write('\n')
+            try:
+                document = document['_source']
+                if not should_drop(document):
+                    json.dump(document, output)
+                output.write('\n')
+            except:
+                logger.error('Error processing document.')
     print 'Done processing %s' % index
 
 
