@@ -28,6 +28,6 @@ client = Elasticsearch(sys.argv[1])
 
 with open('index-sample.csv', 'r') as indices:
     for index in indices:
-        with open('./outputs/%s.jsonl', 'w') as output:
-            process_index(index, client, output)
+        with open('./outputs/%s.jsonl' % index, 'w') as output:
+            process_index(index.strip(), client, output)
         break
