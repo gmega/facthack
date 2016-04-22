@@ -6,6 +6,8 @@ import requests
 
 pool = Pool(int(sys.argv[1]))
 
+auth_tuple = (sys.argv[2], sys.argv[3])
+
 
 def process_document(raw_document):
     parsed = json.loads(raw_document)
@@ -14,7 +16,8 @@ def process_document(raw_document):
         response = json.loads(
             requests.post(
                 'https://companytxt.spaziodati.eu/companytxt',
-                data={'text': sentence, 'include': ['sameAs', 'types']}
+                data={'text': sentence, 'include': ['sameAs', 'types']},
+                auth=auth_tuple
             ).content
         )
 
