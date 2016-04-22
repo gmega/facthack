@@ -60,7 +60,7 @@ def get_source(document):
 
 
 def get_categories(document):
-    categories = document['nc:annotations']['nc:categoryAnnotation'].get('pt:category', [])
+    categories = document['nc:annotations'].get('nc:categoryAnnotation', {}).get('pt:category', [])
     return [category['nc:categoryID'] for category in categories]
 
 
