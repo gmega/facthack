@@ -2,31 +2,10 @@
 
 import json
 import logging
-import sys
-from functools import partial
-from multiprocessing import Pool
 
 from elasticsearch import helpers
-from elasticsearch.client import Elasticsearch
-
-EXCLUDE_SOURCES = [
-    'Noodls', 'The Sidney Morning Herald.com', 'Reuters UK', 'Usa Today.com', 'Stern.de', 'Facts.ch',
-    'CalcioMercato.com', 'Herald Scotland.com', 'CalcioMercato.it', 'Calcio Fanpage',
-    'The Washington Post.com', 'Basketinside.com', 'Thestar.com', 'TheGuardian', 'BBC News',
-    'La Gazzetta dello Sport (Ed. Roma)', 'The Japan Times', 'La Gazzetta dello Sport.it',
-    'Frankfurter Allgemeine.faz.net', 'Le Monde.fr', 'La Gazzetta dello Sport', 'ChinaDaily.com.cn',
-    'La Nacion', '20 Minuten.ch', 'Bloomberg', 'Libération.fr', 'Adevarul.ro', 'Dagensindustri.se',
-    'Corriere dello Sport.it', 'Cinco Dìas', 'Datasport', 'ZDNet.com', 'The Telegraph.com.a',
-    'Sport Asti.it', 'COR.COM', 'Janes.com', 'Ok Tennis', 'ZDNet.de', 'Tutto Basket.net',
-    'La Gazzetta dello Sport (Ed. Sicilia)', 'FinYear.com', 'The Telegraph.co.uk',
-    'La Gazzetta dello Sport (Ed. Puglia)', 'Sport Press', 'SportReggio', 'Food Navigator.com',
-    'Tuttosport.com', 'Catholic News Service.com', 'Le Monde Diplomatique', 'Classic Boat.co.uk',
-    'Ve.Sport.it', 'Digital Agenda for Europe', 'Milano online'
-]
 
 FILTER_CATEGORIES = ['Cronaca Locale', 'Prima Pagina', 'Economia / Finanza', 'Non specificata']
-
-FILTER_SECTORS = ['Generalista', 'Attualità', 'Economia e Finanza']
 
 EXCLUDE_HASHES = ['0647ac34aa1ed17ba998f7fc1d1f7ef2', 'd41d8cd98f00b204e9800998ecf8427e']
 logger = logging.getLogger(__name__)
@@ -40,10 +19,9 @@ def should_drop(document):
     empty_title = info['nc:emptyTitle']
     borsa = info['nc:listOfNamesNumbers']
     hash = info['nc:hash']
-    # lang_qual = info['nc:langQuality']
+    language = document['rnews:language']
 
     categories = get_categories(document)
-    #    source = get_source(document)
 
     return body_dirt >= 0.5 or \
            body_size < 300 or \
@@ -51,16 +29,20 @@ def should_drop(document):
            hash in EXCLUDE_HASHES or \
            any(category in FILTER_CATEGORIES for category in categories) or \
            empty_title or \
-           borsa
+           borsa or \
+           language != 'it'
 
 
-def get_source(document):
-    extras = document['nc:extras'].get('nc:presstoday', None)
-    # This is a Noodl (pressrelease)
-    if extras is None:
-        return None
+def clean_annotations(document):
+    # Filters out bad annotations.
+    document['nc:annotations'] = [
+        x for x in document['nc:annotations'].get('nc:subjectAnnotation', []) if is_good(x)
+    ]
 
-    return extras['source']
+
+def is_good(annotation):
+    threshold = 0.7 if annotation['nc:reconciled'] else 0.8
+    return annotation['nc:confidence'] >= threshold
 
 
 def get_categories(document):
@@ -70,19 +52,19 @@ def get_categories(document):
 
 def process_index(index, client, query, output=None):
     index = index.strip()
-    squery = json.dumps(query)
+    query_string = json.dumps(query)
     print 'Processing index %s' % index
     output = './outputs/%s.jsonl' % index if output is None else output
     with open(output, 'w') as ostream:
         for document in helpers.scan(
                 client,
-                query=squery,
+                query=query_string,
                 index=index,
                 doc_type='news_v2',
                 scroll='5m'
         ):
             try:
-                document = document['_source']
+                clean_annotations(document)
                 if not should_drop(document):
                     json.dump(document, ostream)
                     ostream.write('\n')
